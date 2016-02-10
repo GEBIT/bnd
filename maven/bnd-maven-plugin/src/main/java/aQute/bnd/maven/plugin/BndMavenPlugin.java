@@ -18,20 +18,19 @@ package aQute.bnd.maven.plugin;
 
 import static aQute.lib.io.IO.getFile;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.jar.Manifest;
+import java.util.zip.ZipException;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -50,6 +49,7 @@ import aQute.bnd.build.Project;
 import aQute.bnd.osgi.Builder;
 import aQute.bnd.osgi.Constants;
 import aQute.bnd.osgi.FileResource;
+import aQute.bnd.osgi.Instruction;
 import aQute.bnd.osgi.Jar;
 import aQute.bnd.osgi.Processor;
 import aQute.bnd.osgi.Resource;
@@ -86,6 +86,7 @@ public class BndMavenPlugin extends AbstractMojo {
 	@Component
 	private BuildContext buildContext;
 
+	@Override
 	public void execute() throws MojoExecutionException {
 		Log log = getLog();
 
@@ -102,13 +103,16 @@ public class BndMavenPlugin extends AbstractMojo {
 		Properties mavenProperties = new Properties(beanProperties);
 		mavenProperties.putAll(project.getProperties());
 
-		try (Builder builder = new Builder(new Processor(mavenProperties, false))) {
+		boolean isIncrementalBuilder = buildContext.isIncremental() && manifestPath.exists();
+		try (Builder builder = (isIncrementalBuilder ? new IncrementalBuilder(new Processor(mavenProperties, false))
+				: new Builder(new Processor(mavenProperties, false)))) {
 			builder.setTrace(log.isDebugEnabled());
 
 			builder.setBase(project.getBasedir());
 			loadProjectProperties(builder, project);
 	        builder.setProperty("project.output", targetDir.getCanonicalPath());
 			
+
 			// Reject sub-bundle projects
 			List<Builder> subs = builder.getSubBuilders();
 			if ((subs.size() != 1) || !builder.equals(subs.get(0))) {
@@ -117,7 +121,8 @@ public class BndMavenPlugin extends AbstractMojo {
 
 			// Include local project packages automatically
 			if (classesDir.isDirectory()) {
-				Jar classesDirJar = new Jar(project.getName(), classesDir);
+				Jar classesDirJar = (builder instanceof IncrementalBuilder ? ((IncrementalBuilder) builder).newJar(
+						project.getName(), classesDir) : new Jar(project.getName(), classesDir));
 				classesDirJar.setManifest(new Manifest());
 				builder.setJar(classesDirJar);
 			}
@@ -160,15 +165,45 @@ public class BndMavenPlugin extends AbstractMojo {
 			// Build bnd Jar (in memory)
 			Jar bndJar = builder.build();
 
+			// on incremental build abort here if there is no incremental change
+			if (buildContext.isIncremental() && manifestPath.exists()) {
+				StringBuilder newClasspathBuilder = new StringBuilder();
+				for (Jar entry : builder.getClasspath()) {
+					if (newClasspathBuilder.length() > 0) {
+						newClasspathBuilder.append(';');
+					}
+					newClasspathBuilder.append(entry.getSource() != null ? entry.getSource().getAbsolutePath() : entry.getName());
+				}
+				String newClasspath = newClasspathBuilder.toString();
+				String oldClasspath = (String) buildContext.getValue("classpath");
+				buildContext.setValue("classpath", newClasspath);
+
+				if (builder.lastModified() <= manifestPath.lastModified()) {
+					// the classpatch might be changed (e.g. some jar removed)
+					if (oldClasspath != null && oldClasspath.equals(newClasspath)) {
+						// nothing to do, no relevant changes
+						log.info(project.getName() + ": no incremental changes");
+						return;
+					}
+					log.info(project.getName() + ": Incremental build trigger: classpath change");
+				} else {
+					log.info(project.getName() + ": Incremental build triggers:");
+					for (String reason : ((IncrementalBuilder) builder).changeReasons) {
+						log.info("- " + reason);
+					}
+				}
+			}
+
 			// Output manifest to <classes>/META-INF/MANIFEST.MF
 			Files.createDirectories(manifestPath.toPath().getParent());
 
+			// Expand Jar into target/classes
+			expandJar(bndJar, classesDir);
+
+			// Write the manifest last, so that it has a newer modification stamp
 			try (OutputStream manifestOut = buildContext.newFileOutputStream(manifestPath)) {
 				bndJar.writeManifest(manifestOut);
 			}
-
-			// Expand Jar into target/classes
-			expandJar(bndJar, classesDir);
 
 			// Finally, report
 			reportErrorsAndWarnings(builder);
@@ -179,6 +214,11 @@ public class BndMavenPlugin extends AbstractMojo {
 	}
 
 	private void loadProjectProperties(Builder builder, MavenProject project) throws Exception {
+		if (builder instanceof IncrementalBuilder) {
+			// track POM changes
+			builder.updateModified(project.getFile().lastModified(), "POM: " + project.getName());
+		}
+
 		// Load parent project properties first
 		MavenProject parentProject = project.getParent();
 		if (parentProject != null) {
@@ -190,6 +230,11 @@ public class BndMavenPlugin extends AbstractMojo {
 		File bndFile = new File(baseDir, Project.BNDFILE);
 		if (bndFile.isFile()) { // we use setProperties to handle -include
 			builder.setProperties(baseDir, builder.loadProperties(bndFile));
+
+			if (builder instanceof IncrementalBuilder) {
+				// track POM changes
+				builder.updateModified(bndFile.lastModified(), "bnd: " + project.getName());
+			}
 		}
 	}
 
@@ -304,6 +349,75 @@ public class BndMavenPlugin extends AbstractMojo {
 				value = getField(value, key.substring(i + 1));
 			}
 			return value;
+		}
+	}
+	
+	private class IncrementalBuilder extends Builder {
+		private List<String> changeReasons = new ArrayList<String>();
+
+		public IncrementalBuilder(Processor parent) {
+			super(parent);
+		}
+		
+		@Override
+		public boolean addAll(Jar to, Jar sub, Instruction filter, String destination) {
+			updateModified(sub.lastModified(), sub.getName());
+			return super.addAll(to, sub, filter, destination);
+		}
+
+		@Override
+		public void addClasspath(Jar jar) {
+			// for classpath elements we cannot compare the modification time with the manifest, so we track it
+			// separatly.
+			if (jar.getSource() != null) {
+				Long lastSeenModification = (Long) buildContext.getValue(jar.getSource().getAbsolutePath());
+				if (lastSeenModification != null && lastSeenModification != jar.lastModified()) {
+					// jar has changed
+					lastSeenModification = null;
+				}
+				if (lastSeenModification == null) {
+					buildContext.setValue(jar.getSource().getAbsolutePath(), jar.lastModified());
+					// force a change
+					updateModified(System.currentTimeMillis(), jar.getSource().getAbsolutePath());
+				}
+			}
+			super.addClasspath(jar);
+		}
+
+		@Override
+		protected void extractFromJar(Jar jar, String source, String destination, boolean absentIsOk)
+				throws ZipException, IOException {
+			updateModified(jar.lastModified(), jar.getName());
+			super.extractFromJar(jar, source, destination, absentIsOk);
+		}
+
+		@Override
+		public boolean updateModified(long time, String reason) {
+			if (time > manifestPath.lastModified()) {
+				if (!changeReasons.contains(reason)) {
+					changeReasons.add(reason);
+				}
+			} 
+			return super.updateModified(time, reason);
+		}
+
+		public Jar newJar(String string, File file) throws ZipException, IOException {
+			return new IncrementalJar(string, file);
+		}
+
+		// needs to be an inner class so that putResource has access to the builder
+		private class IncrementalJar extends Jar {
+			public IncrementalJar(String string, File file) throws ZipException, IOException {
+				super(string, file);
+			}
+			
+			@Override
+			public boolean putResource(String path, Resource resource, boolean overwrite) {
+				if (resource.lastModified() != -1) {
+					IncrementalBuilder.this.updateModified(resource.lastModified(), path);
+				}
+				return super.putResource(path, resource, overwrite);
+			}
 		}
 	}
 }
