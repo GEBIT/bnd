@@ -160,13 +160,6 @@ public class BndMavenPlugin extends AbstractMojo {
 			// Build bnd Jar (in memory)
 			Jar bndJar = builder.build();
 
-			// Output manifest to <classes>/META-INF/MANIFEST.MF
-			Files.createDirectories(manifestPath.toPath().getParent());
-
-			try (OutputStream manifestOut = buildContext.newFileOutputStream(manifestPath)) {
-				bndJar.writeManifest(manifestOut);
-			}
-
 			// Expand Jar into target/classes
 			expandJar(bndJar, classesDir);
 
@@ -191,6 +184,10 @@ public class BndMavenPlugin extends AbstractMojo {
 		if (bndFile.isFile()) { // we use setProperties to handle -include
 			builder.setProperties(baseDir, builder.loadProperties(bndFile));
 		}
+		File pomFile = project.getFile(); // pom files can affect dependencies
+		if ((pomFile != null) && pomFile.isFile()) {
+			builder.updateModified(pomFile.lastModified(), "POM: " + pomFile);
+		}
 	}
 
 	private void reportErrorsAndWarnings(Builder builder) throws MojoExecutionException {
@@ -213,32 +210,33 @@ public class BndMavenPlugin extends AbstractMojo {
 	}
 	
 	private void expandJar(Jar jar, File dir) throws Exception {
+		final long lastModified = jar.lastModified();
 		dir = dir.getAbsoluteFile();
-		if (!dir.exists() && !dir.mkdirs()) {
-			throw new IOException("Could not create directory " + dir);
-		}
-		if (!dir.isDirectory()) {
-			throw new IllegalArgumentException("Not a dir: " + dir.getAbsolutePath());
-		}
+		Files.createDirectories(dir.toPath());
 
 		for (Map.Entry<String,Resource> entry : jar.getResources().entrySet()) {
 			File outFile = getFile(dir, entry.getKey());
-			File outDir = outFile.getParentFile();
-			if (!outDir.exists() && !outDir.mkdirs()) {
-				throw new IOException("Could not create directory " + outDir);
-			}
-
 			Resource resource = entry.getValue();
-			// Skip the copy if the source and target file are the same
+			// Skip the copy if the source and target are the same file
 			if (resource instanceof FileResource) {
 				@SuppressWarnings("resource")
 				FileResource fr = (FileResource) resource;
-				if (outFile.equals(fr.getFile()))
+				if (outFile.equals(fr.getFile())) {
 					continue;
+				}
 			}
+			if (!outFile.exists() || outFile.lastModified() < lastModified) {
+				Files.createDirectories(outFile.toPath().getParent());
+				try (OutputStream out = buildContext.newFileOutputStream(outFile)) {
+					IO.copy(resource.openInputStream(), out);
+				}
+			}
+		}
 
-			try (OutputStream out = buildContext.newFileOutputStream(outFile)) {
-				IO.copy(resource.openInputStream(), out);
+		if (!manifestPath.exists() || manifestPath.lastModified() < lastModified) {
+			Files.createDirectories(manifestPath.toPath().getParent());
+			try (OutputStream manifestOut = buildContext.newFileOutputStream(manifestPath)) {
+				jar.writeManifest(manifestOut);
 			}
 		}
 	}
