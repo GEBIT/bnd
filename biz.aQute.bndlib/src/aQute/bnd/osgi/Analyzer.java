@@ -1319,7 +1319,6 @@ public class Analyzer extends Processor {
 	 */
 	public Jar setJar(File jar) throws IOException {
 		Jar jarx = new Jar(jar);
-		addClose(jarx);
 		return setJar(jarx);
 	}
 
@@ -2091,6 +2090,7 @@ public class Analyzer extends Processor {
 		if (isPedantic() && jar.getResources().isEmpty())
 			warning("There is an empty jar or directory on the classpath: " + jar.getName());
 
+		addClose(jar);
 		classpath.add(jar);
 	}
 
@@ -2111,8 +2111,7 @@ public class Analyzer extends Processor {
 		if (!cp.exists())
 			warning("File on classpath that does not exist: " + cp);
 		Jar jar = new Jar(cp);
-		addClose(jar);
-		classpath.add(jar);
+		addClasspath(jar);
 	}
 
 	@Override
