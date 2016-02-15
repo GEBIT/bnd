@@ -64,9 +64,9 @@ copyright.html:         Copyright &copy; aQute SARL (2000, ${tstamp;yyyy}) and o
 # This is the version to baseline this build against.
 baseline.version:       3.0.0
 # biz.aQute.bndlib:aQute.bnd.osgi.About.CURRENT needs to be kept in sync with the base.version.
-base.version:           3.1.0
-build.version:          ${base.version}.${tstamp}
--outputmask:            ${@bsn}-${version;===;${@version}}.jar
+base.version:           3.1.0-gebit4
+build.version:          3.1.0.gebit4-${tstamp}
+-outputmask:            ${@bsn}-3.1.0-gebit4.jar
 groupid:                biz.aQute.bnd
 -groupid:				${groupid}
 Bundle-Version:         ${build.version}
