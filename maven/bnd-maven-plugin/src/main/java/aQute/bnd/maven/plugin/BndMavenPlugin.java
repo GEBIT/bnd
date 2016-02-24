@@ -52,6 +52,7 @@ import aQute.bnd.osgi.Builder;
 import aQute.bnd.osgi.Constants;
 import aQute.bnd.osgi.FileResource;
 import aQute.bnd.osgi.Jar;
+import aQute.bnd.osgi.JarResource;
 import aQute.bnd.osgi.Processor;
 import aQute.bnd.osgi.Resource;
 import aQute.bnd.version.MavenVersion;
@@ -84,6 +85,9 @@ public class BndMavenPlugin extends AbstractMojo {
 	@Parameter(defaultValue = "${settings}", readonly = true)
 	private Settings settings;
 	
+	@Parameter(defaultValue = "false")
+	private boolean fastIncrementalCheck;
+	
 	@Component
 	private BuildContext buildContext;
 
@@ -112,7 +116,7 @@ public class BndMavenPlugin extends AbstractMojo {
 
 			// incremental build only if any resource in the project outside of
 			// the targetDir is changed. This implicitly includes POM and bnd files.
-			if (buildContext.isIncremental() && manifestPath.exists()) {
+			if (fastIncrementalCheck && buildContext.isIncremental() && manifestPath.exists()) {
 				boolean hasChanges = false;
 				if (builder.lastModified() >= manifestPath.lastModified()) {
 					// change in project's POM or bnd
@@ -271,6 +275,7 @@ public class BndMavenPlugin extends AbstractMojo {
 		}
 	}
 	
+	@SuppressWarnings("resource")
 	private void expandJar(Jar jar, File dir) throws Exception {
 		dir = dir.getAbsoluteFile();
 		if (!dir.exists() && !dir.mkdirs()) {
@@ -280,6 +285,7 @@ public class BndMavenPlugin extends AbstractMojo {
 			throw new IllegalArgumentException("Not a dir: " + dir.getAbsolutePath());
 		}
 
+		String projectBasePath = project.getBasedir().getCanonicalPath();
 		for (Map.Entry<String,Resource> entry : jar.getResources().entrySet()) {
 			File outFile = getFile(dir, entry.getKey());
 			File outDir = outFile.getParentFile();
@@ -290,10 +296,29 @@ public class BndMavenPlugin extends AbstractMojo {
 			Resource resource = entry.getValue();
 			// Skip the copy if the source and target file are the same
 			if (resource instanceof FileResource) {
-				@SuppressWarnings("resource")
 				FileResource fr = (FileResource) resource;
+				if (fastIncrementalCheck) {
+					// verify only source material from project is used
+					if (!fr.getFile().getCanonicalPath().startsWith(projectBasePath)) {
+						throw new MojoExecutionException("Cannot use 'fastIncrementalCheck' with source material outside the project directory: " + fr.getFile());
+					}
+				}
+				
 				if (outFile.equals(fr.getFile()))
 					continue;
+			} else if (resource instanceof JarResource) {
+				JarResource jr = (JarResource) resource;
+				if (fastIncrementalCheck) {
+					// verify only source material from project is used
+					if (jr.getJar().getSource() == null) {
+						throw new MojoExecutionException("Cannot use 'fastIncrementalCheck' with source material outside the project directory: " + jr.getJar().getName());
+					}
+					if (!jr.getJar().getSource().getCanonicalPath().startsWith(projectBasePath)) {
+						throw new MojoExecutionException("Cannot use 'fastIncrementalCheck' with source material outside the project directory: " + jr.getJar().getSource());
+					}
+				}
+			} else {
+				// we assume all other resources (like TagResources) are somehow derived from the project input
 			}
 
 			try (OutputStream out = buildContext.newFileOutputStream(outFile)) {
