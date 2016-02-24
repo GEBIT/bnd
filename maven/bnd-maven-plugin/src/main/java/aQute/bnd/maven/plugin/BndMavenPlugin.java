@@ -112,8 +112,12 @@ public class BndMavenPlugin extends AbstractMojo {
 
 			// incremental build only if any resource in the project outside of
 			// the targetDir is changed. This implicitly includes POM and bnd files.
-			if (buildContext.isIncremental()) {
+			if (buildContext.isIncremental() && manifestPath.exists()) {
 				boolean hasChanges = false;
+				if (builder.lastModified() >= manifestPath.lastModified()) {
+					// change in project's POM or bnd
+					hasChanges = true;
+				}
 
 				// compute relative target path. While changes here should never
 				// be reported, sometimes they are, e.g. due to (temporary)
@@ -241,6 +245,10 @@ public class BndMavenPlugin extends AbstractMojo {
 		File bndFile = new File(baseDir, Project.BNDFILE);
 		if (bndFile.isFile()) { // we use setProperties to handle -include
 			builder.setProperties(baseDir, builder.loadProperties(bndFile));
+		}
+		File pomFile = project.getFile(); // pom files can affect dependencies
+		if ((pomFile != null) && pomFile.isFile()) {
+			builder.updateModified(pomFile.lastModified(), "POM: " + pomFile);
 		}
 	}
 
