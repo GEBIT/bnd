@@ -18,15 +18,12 @@ package aQute.bnd.maven.plugin;
 
 import static aQute.lib.io.IO.getFile;
 
+import java.io.File;
+import java.io.OutputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -219,13 +216,6 @@ public class BndMavenPlugin extends AbstractMojo {
 			// Build bnd Jar (in memory)
 			Jar bndJar = builder.build();
 
-			// Output manifest to <classes>/META-INF/MANIFEST.MF
-			Files.createDirectories(manifestPath.toPath().getParent());
-
-			try (OutputStream manifestOut = buildContext.newFileOutputStream(manifestPath)) {
-				bndJar.writeManifest(manifestOut);
-			}
-
 			// Expand Jar into target/classes
 			expandJar(bndJar, classesDir);
 
@@ -277,24 +267,15 @@ public class BndMavenPlugin extends AbstractMojo {
 	
 	@SuppressWarnings("resource")
 	private void expandJar(Jar jar, File dir) throws Exception {
+		final long lastModified = jar.lastModified();
 		dir = dir.getAbsoluteFile();
-		if (!dir.exists() && !dir.mkdirs()) {
-			throw new IOException("Could not create directory " + dir);
-		}
-		if (!dir.isDirectory()) {
-			throw new IllegalArgumentException("Not a dir: " + dir.getAbsolutePath());
-		}
+		Files.createDirectories(dir.toPath());
 
 		String projectBasePath = project.getBasedir().getCanonicalPath();
 		for (Map.Entry<String,Resource> entry : jar.getResources().entrySet()) {
 			File outFile = getFile(dir, entry.getKey());
-			File outDir = outFile.getParentFile();
-			if (!outDir.exists() && !outDir.mkdirs()) {
-				throw new IOException("Could not create directory " + outDir);
-			}
-
 			Resource resource = entry.getValue();
-			// Skip the copy if the source and target file are the same
+			// Skip the copy if the source and target are the same file
 			if (resource instanceof FileResource) {
 				FileResource fr = (FileResource) resource;
 				if (fastIncrementalCheck) {
@@ -303,9 +284,9 @@ public class BndMavenPlugin extends AbstractMojo {
 						throw new MojoExecutionException("Cannot use 'fastIncrementalCheck' with source material outside the project directory: " + fr.getFile());
 					}
 				}
-				
-				if (outFile.equals(fr.getFile()))
+				if (outFile.equals(fr.getFile())) {
 					continue;
+				}
 			} else if (resource instanceof JarResource) {
 				JarResource jr = (JarResource) resource;
 				if (fastIncrementalCheck) {
@@ -320,9 +301,18 @@ public class BndMavenPlugin extends AbstractMojo {
 			} else {
 				// we assume all other resources (like TagResources) are somehow derived from the project input
 			}
+			if (!outFile.exists() || outFile.lastModified() < lastModified) {
+				Files.createDirectories(outFile.toPath().getParent());
+				try (OutputStream out = buildContext.newFileOutputStream(outFile)) {
+					IO.copy(resource.openInputStream(), out);
+				}
+			}
+		}
 
-			try (OutputStream out = buildContext.newFileOutputStream(outFile)) {
-				IO.copy(resource.openInputStream(), out);
+		if (!manifestPath.exists() || manifestPath.lastModified() < lastModified) {
+			Files.createDirectories(manifestPath.toPath().getParent());
+			try (OutputStream manifestOut = buildContext.newFileOutputStream(manifestPath)) {
+				jar.writeManifest(manifestOut);
 			}
 		}
 	}
