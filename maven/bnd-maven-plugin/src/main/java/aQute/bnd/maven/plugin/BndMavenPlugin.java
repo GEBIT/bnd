@@ -41,6 +41,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.settings.Settings;
+import org.codehaus.plexus.util.MatchPatterns;
 import org.codehaus.plexus.util.Scanner;
 import org.sonatype.plexus.build.incremental.BuildContext;
 
@@ -85,6 +86,16 @@ public class BndMavenPlugin extends AbstractMojo {
 	@Parameter(defaultValue = "false")
 	private boolean fastIncrementalCheck;
 	
+	/**
+	 * Locations that are ignored for incremental build checks. When a pattern ends with a '/' or '\', "**" is appended.
+	 * <p/>
+	 * By default the whole target output directory is ignored
+	 * 
+	 * @see DirectoryScanner#setIncludes(String[])
+	 */
+	@Parameter(defaultValue = "target/", required = false)
+	protected String[] fastIncrementalIgnore;
+	
 	@Component
 	private BuildContext buildContext;
 
@@ -117,31 +128,26 @@ public class BndMavenPlugin extends AbstractMojo {
 				boolean hasChanges = false;
 				if (builder.lastModified() >= manifestPath.lastModified()) {
 					// change in project's POM or bnd
+					log.debug("Change found in " + manifestPath);
 					hasChanges = true;
 				}
 
-				// compute relative target path. While changes here should never
-				// be reported, sometimes they are, e.g. due to (temporary)
-				// misconfiguration
-				String basePath = project.getBasedir().getCanonicalPath();
-				String targetPath = targetDir.getCanonicalPath();
-				int i = targetPath.indexOf(basePath);
-				if (i != 0) {
-					// target is not relative to basedir
-					targetPath = null;
-				} else {
-					targetPath = targetPath.substring(basePath.length() + 1);
-					if (!targetPath.endsWith(File.separator)) {
-						targetPath = targetPath + File.separator;
+				for (int i=0; i<fastIncrementalIgnore.length; ++i) {
+					// normalize separators
+					fastIncrementalIgnore[i] = fastIncrementalIgnore[i].replace( File.separatorChar == '/' ? '\\' : '/', File.separatorChar);
+					if (fastIncrementalIgnore[i].endsWith(File.separator)) {
+						fastIncrementalIgnore[i] += "**"; 
 					}
 				}
+				MatchPatterns excludePatterns = MatchPatterns.from( fastIncrementalIgnore );
 
 				Scanner changeScanner = buildContext.newScanner(project.getBasedir(), true);
 				changeScanner.scan();
 				for (String sourceFile : changeScanner.getIncludedFiles()) {
-					if (targetPath == null || !sourceFile.startsWith(targetPath)) {
+					if (!excludePatterns.matches(sourceFile.replace( File.separatorChar == '/' ? '\\' : '/', File.separatorChar), false)) {
 						if (!buildContext.isUptodate(manifestPath, new File(project.getBasedir(), sourceFile))) {
 							hasChanges = true;
+							log.info("Change found in " + sourceFile);
 							break;
 						}
 					}
@@ -152,8 +158,9 @@ public class BndMavenPlugin extends AbstractMojo {
 					Scanner deleteScanner = buildContext.newDeleteScanner(project.getBasedir());
 					deleteScanner.scan();
 					for (String sourceFile : deleteScanner.getIncludedFiles()) {
-						if (targetPath == null || !sourceFile.startsWith(targetPath)) {
+						if (!excludePatterns.matches(sourceFile.replace( File.separatorChar == '/' ? '\\' : '/', File.separatorChar), false)) {
 							hasChanges = true;
+							log.debug("Change found in " + sourceFile + " (deleted)");
 							break;
 						}
 					}
