@@ -133,7 +133,10 @@ public class BndMavenPlugin extends AbstractMojo {
 
 	private File									propertiesFile;
 
+	private static final Object lock = new Object();
+
 	public void execute() throws MojoExecutionException {
+		synchronized (lock) {
 		if (skip) {
 			logger.debug("skip project as configured");
 			return;
@@ -278,6 +281,7 @@ public class BndMavenPlugin extends AbstractMojo {
 			throw e;
 		} catch (Exception e) {
 			throw new MojoExecutionException("bnd error: " + e.getMessage(), e);
+		}
 		}
 	}
 
