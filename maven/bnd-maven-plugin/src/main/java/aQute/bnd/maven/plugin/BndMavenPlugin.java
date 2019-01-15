@@ -154,8 +154,11 @@ public class BndMavenPlugin extends AbstractMojo {
 
 	private File									propertiesFile;
 
+	private static final Object lock = new Object();
+
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
+		synchronized (lock) {
 		if (skip) {
 			logger.debug("skip project as configured");
 			return;
@@ -440,6 +443,7 @@ public class BndMavenPlugin extends AbstractMojo {
 			throw e;
 		} catch (Exception e) {
 			throw new MojoExecutionException("bnd error: " + e.getMessage(), e);
+		}
 		}
 	}
 
