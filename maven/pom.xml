@@ -11,7 +11,7 @@
 	<version>${revision}</version>
 
 	<properties>
-		<revision>3.5.0-gebit1</revision>
+		<revision>3.5.0-gebit2</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<bndlib.version>3.5.0</bndlib.version>
 		<maven.version>3.5.0</maven.version>
