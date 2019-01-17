@@ -20,6 +20,7 @@ import java.io.File;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -115,6 +116,9 @@ public class BndMavenPlugin extends AbstractMojo {
 	@Parameter(property = "bnd.skip", defaultValue = "false")
 	private boolean									skip;
 
+	@Parameter(property = "bnd.packagingTypes", defaultValue = PACKAGING_JAR + "," + PACKAGING_WAR)
+	private String[]								packagingTypes;
+
 	/**
 	 * File path to a bnd file containing bnd instructions for this project.
 	 * Defaults to {@code bnd.bnd}. The file path can be an absolute or relative
@@ -159,7 +163,7 @@ public class BndMavenPlugin extends AbstractMojo {
 
 		// Exit without generating anything if this is neither a jar or war
 		// project. Probably it's just a parent project.
-		if (!PACKAGING_JAR.equals(project.getPackaging()) && !PACKAGING_WAR.equals(project.getPackaging())) {
+		if (!Arrays.asList(packagingTypes).contains(project.getPackaging())) {
 			logger.info("skip project with packaging=" + project.getPackaging());
 			return;
 		}
