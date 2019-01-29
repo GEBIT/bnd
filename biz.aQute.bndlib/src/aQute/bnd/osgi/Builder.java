@@ -1241,6 +1241,10 @@ public class Builder extends Analyzer {
 			if ("META-INF/MANIFEST.MF".equals(name))
 				continue;
 
+			String parts[] = name.split("/");
+			if (doNotCopy(parts[parts.length - 1]))
+				continue;
+
 			if (filter == null || filter.matches(name) ^ filter.isNegated())
 				dupl |= to.putResource(Processor.appendPath(destination, name), sub.getResource(name), true);
 		}
