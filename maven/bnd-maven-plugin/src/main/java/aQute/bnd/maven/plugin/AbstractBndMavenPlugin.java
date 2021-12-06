@@ -293,7 +293,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 			logger.debug("builder classpath: {}", builder.getProperty("project.buildpath"));
 
 			// Compute bnd sourcepath
-			boolean delta = !buildContext.isIncremental() || manifestOutOfDate();
+			boolean delta = !buildContext.isIncremental() || manifestOutOfDate(builder.lastModified());
 			List<File> sourcepath = new ArrayList<>();
 			if (getSourceDir().exists()) {
 				sourcepath.add(getSourceDir().getCanonicalFile());
@@ -715,9 +715,9 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 			}
 		}
 
-		if (manifestOutOfDate() || getManifestPath().lastModified() < lastModified) {
+		if (manifestOutOfDate(lastModified)) {
 			if (logger.isDebugEnabled()) {
-				if (!manifestOutOfDate())
+				if (getManifestPath().isFile())
 					logger.debug(String.format("Updating lastModified: %tF %<tT.%<tL '%s'",
 						getManifestPath().lastModified(), getManifestPath()));
 				else
@@ -732,7 +732,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 		}
 	}
 
-	private boolean manifestOutOfDate() {
+	private boolean manifestOutOfDate(long lastModified) {
 		if (!getManifestPath().isFile()) {
 			return true;
 		}
@@ -741,6 +741,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 		if (buildContext.getValue(MANIFEST_LAST_MODIFIED) != null) {
 			manifestLastModified = (Long) buildContext.getValue(MANIFEST_LAST_MODIFIED);
 		}
-		return getManifestPath().lastModified() != manifestLastModified;
+		return getManifestPath().lastModified() != manifestLastModified
+			|| getManifestPath().lastModified() < lastModified;
 	}
 }
