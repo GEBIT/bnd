@@ -25,7 +25,7 @@ var deploy = tasks.register("deploy", Exec.class) {
 	if (logger.isDebugEnabled()) {
 		args("--debug")
 	}
-	args("-Pdist")
+//	args("-Pdist")
 	args("-Dreleaserepo=${releaserepo}")
 	if (localrepo) {
 		args("-Dmaven.repo.local=${localrepo}")
