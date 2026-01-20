@@ -349,7 +349,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 			logger.debug("builder classpath: {}", builder.getProperty("project.buildpath"));
 
 			// Compute bnd sourcepath
-			boolean delta = !buildContext.isIncremental() || outOfDate();
+			boolean delta = !buildContext.isIncremental() || outOfDate(builder.lastModified());
 			List<File> sourcepath = new ArrayList<>();
 			if (getSourceDir().exists()) {
 				sourcepath.add(getSourceDir().getCanonicalFile());
@@ -446,7 +446,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 
 	private void attachArtifactToProject(Jar bndJar) throws Exception {
 		File artifactFile = getArtifactFile();
-		if (outOfDate(artifactFile) || artifactFile.lastModified() < bndJar.lastModified()) {
+		if (outOfDate(artifactFile, bndJar.lastModified())) {
 			if (logger.isDebugEnabled()) {
 				if (artifactFile.exists())
 					logger.debug(String.format("Updating lastModified: %tF %<tT.%<tL '%s'", artifactFile.lastModified(),
@@ -622,9 +622,9 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 
 	private void writeManifest(Jar jar, File manifestPath) throws Exception {
 		final long lastModified = jar.lastModified();
-		if (outOfDate(manifestPath) || manifestPath.lastModified() < lastModified) {
+		if (outOfDate(manifestPath, lastModified)) {
 			if (logger.isDebugEnabled()) {
-				if (!outOfDate(manifestPath))
+				if (manifestPath.isFile())
 					logger.debug(String.format("Updating lastModified: %tF %<tT.%<tL '%s'",
 						manifestPath.lastModified(), manifestPath));
 				else
@@ -639,13 +639,13 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 		}
 	}
 
-	private boolean outOfDate() {
+	private boolean outOfDate(long lm) {
 		String goal = mojoExecution.getMojoDescriptor()
 			.getGoal();
-		return outOfDate(isPackagingGoal(goal) ? getArtifactFile() : getManifestPath());
+		return outOfDate(isPackagingGoal(goal) ? getArtifactFile() : getManifestPath(), lm);
 	}
 
-	private boolean outOfDate(File target) {
+	private boolean outOfDate(File target, long lm) {
 		if (!target.isFile()) {
 			return true;
 		}
@@ -654,6 +654,7 @@ public abstract class AbstractBndMavenPlugin extends AbstractMojo {
 		if (buildContext.getValue(LAST_MODIFIED) != null) {
 			lastModified = (Long) buildContext.getValue(LAST_MODIFIED);
 		}
-		return target.lastModified() != lastModified;
+		return target.lastModified() != lastModified
+			|| target.lastModified() < lm;
 	}
 }
