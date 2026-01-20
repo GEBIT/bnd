@@ -6,7 +6,7 @@
 
 	<groupId>biz.aQute.bnd</groupId>
 	<artifactId>maven-plugins</artifactId>
-	<version>1.0.0</version>
+	<version>7.2.1-gebit1</version>
 	<description>Reactor to build the Bnd Maven plugins.</description>
 	<name>Bnd Maven Plugins Reactor</name>
 	<packaging>pom</packaging>

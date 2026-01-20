@@ -12,13 +12,14 @@
 	<version>${revision}</version>
 
 	<properties>
-		<revision>7.2.1</revision>
+		<revision>7.2.1-gebit1</revision>
 		<project.build.outputTimestamp>1980-02-01T00:00:00Z</project.build.outputTimestamp>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<maven.compiler.release>17</maven.compiler.release>
 		<jpmsOptions>--add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.jar=ALL-UNNAMED --add-opens=java.base/java.util.regex=ALL-UNNAMED --add-opens=java.base/java.util.zip=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.file=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.ftp=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.http=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.https=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.jar=ALL-UNNAMED --add-opens=java.base/sun.net.www.protocol.jrt=ALL-UNNAMED</jpmsOptions>
 		<mavenOpts>${jpmsOptions}</mavenOpts>
+		<bndlib.version>7.2.1</bndlib.version>
 		<osgi.annotation.version>8.1.0</osgi.annotation.version>
 		<!-- The following versions must match those in cnf/ext/maven-plugin.bnd -->
 		<maven.target.version>3.3.9</maven.target.version>
@@ -139,37 +140,37 @@
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.bnd.maven</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.bnd.util</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.bndlib</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.resolve</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.repository</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.bnd.reporter</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>${project.groupId}</groupId>
 				<artifactId>biz.aQute.bnd.embedded-repo</artifactId>
-				<version>${project.version}</version>
+				<version>${bndlib.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.junit</groupId>
@@ -339,13 +340,13 @@
 							<project.build.sourceEncoding>${project.build.sourceEncoding}</project.build.sourceEncoding>
 							<project.reporting.outputEncoding>${project.reporting.outputEncoding}</project.reporting.outputEncoding>
 							<maven.compiler.release>${maven.compiler.release}</maven.compiler.release>
-							<bnd.version>${project.version}</bnd.version>
+							<bnd.version>${bndlib.version}</bnd.version>
 							<projectsDirectory>${basedir}/src/it</projectsDirectory>
 							<localRepositoryPath>${project.build.directory}/it-repo</localRepositoryPath>
 							<cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
 						</properties>
 						<scriptVariables>
-							<bndVersion>${project.version}</bndVersion>
+							<bndVersion>${bndlib.version}</bndVersion>
 							<projectsDirectory>${basedir}/src/it</projectsDirectory>
 						</scriptVariables>
 						<mavenOpts>${mavenOpts}</mavenOpts>
